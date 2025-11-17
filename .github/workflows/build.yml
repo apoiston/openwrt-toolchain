@@ -1,0 +1,106 @@
+name: build
+
+on:
+  workflow_dispatch:
+
+env:
+  TZ: Asia/Shanghai 
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: set timezone
+        run: |
+          sudo timedatectl set-timezone Asia/Shanghai
+          date +"%Y-%m-%d %H:%M:%S"
+
+      - name: system info
+        run: |
+          date +"%Y-%m-%d %H:%M:%S"
+          lscpu | grep -E '^Architecture|^CPU\(s\):|^Model name'
+          uname -sr
+          lsb_release -a
+          free -h
+          df -Th
+
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: 'main'
+
+      - name: build
+        uses: apoiston/actions@toolchain
+        with:
+          config_buildinfo: builder/config.buildinfo
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          public-key: ${{ secrets.PUBLIC_KEY }}
+          prepare_compile: ${{ secrets.PREPARE_COMPILE }}
+          prepare_configure: ${{ secrets.PREPARE_CONFIGURE }}
+          prepare_toolchain: ${{ secrets.PREPARE_TOOLCHAIN }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain
+          path: |
+            ./openwrt/builder/*
+
+      - name: prepare
+        continue-on-error: true
+        run: |
+          rsync -a --quiet --include='*.buildinfo' --include='*.txt' --exclude='*' openwrt/builder/ targets/
+
+      - name: commit
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add targets/
+          git commit -m "build: $(date +"%Y-%m-%d %H:%M:%S")"
+          git push origin main --force
+
+      - name: add tag
+        id: add_tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="$(date '+%y.%m.%d')"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            git push origin --delete "$TAG" || true
+          fi
+          git tag -d "$TAG" 2>/dev/null || true
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./openwrt/builder/*.zst
+            ./openwrt/builder/*.txt
+          tag_name: ${{ steps.add_tag.outputs.tag }}
+          name: OpenWrt Toolchain ${{ steps.add_tag.outputs.tag }}
+          body_path: ./openwrt/version.md
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: clean release
+        continue-on-error: true
+        run: |
+          CURRENT_TAG=$(date '+%y.%m.%d')
+          for TAG in $(gh release list --json tagName --jq '.[] | .tagName'); do
+            if [ "$TAG" != "$CURRENT_TAG" ]; then
+              gh release delete "$TAG" --yes --cleanup-tag
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
