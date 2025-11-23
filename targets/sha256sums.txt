@@ -1,1 +1,1 @@
-7c16c41c75f4182611ae334afa92948871ac5287ee63c115ed68fe4f4a7a2ce4  openwrt-toolchain.tar.zst
+a995b0c12cd02735be3ba279304de090ef890ba6167c840d32dcd2e4dcefba78  openwrt-toolchain.tar.zst
