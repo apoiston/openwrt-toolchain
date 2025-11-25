@@ -1,1 +1,1 @@
-f6b6b1444ed1868181a97e7d856e067df3d406c0cd1d5a8f7f717b3fec271079  openwrt-toolchain.tar.zst
+ce6fe814a2a45f080bad9718c887d1f4f515fb962dfda9098ccd045f600c1517  openwrt-toolchain.tar.zst
